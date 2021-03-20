@@ -8,13 +8,14 @@ Maintainer of [The Computer Language Benchmarks Game](https://salsa.debian.org/b
 
 # List of benchmark programs implementations
 
-- [binary-trees](#binary-trees)
+- [binary-trees](#binary-trees) using Project Valhalla to implement inline value types
+- [mandelbrot](#mandelbrot) using Vector API from Project Panama to implement explicit SIMD vectorization
 
 ## binary-trees
 
 binarytrees_7.java is the [binary-trees Java #7 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/binarytrees-java-7.html) that is currently (i.e. as of 20th March 2021) the fastest Java implementation according to official results.
 
-binarytrees_valhalla.java is a modification of above program that incorporates a tree node allocation reducing trick from [binary-trees C# .NET #6 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/binarytrees-csharpcore-6.html), which is in turn based on [binary-trees F# .NET #5 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/binarytrees-fsharpcore-5.html).
+binarytrees_valhalla.java is a modification of above program that incorporates a tree node allocation reducing trick from [binary-trees C# .NET #6 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/binarytrees-csharpcore-6.html), which is in turn based on [binary-trees F# .NET #5 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/binarytrees-fsharpcore-5.html). The trick halves allocation count, i.e. 2x fewer objects are allocated on the heap.
 
 To compile and run binarytrees_valhalla.java, you first need to get a build of Project Valhalla of OpenJDK. First you need to invoke `git clone https://github.com/openjdk/valhalla.git` (I've used commit 683bd428afa00aeb2f8e69fef028673004d3ae86 ). Then proceed with building that OpenJDK flavor: https://github.com/openjdk/valhalla/blob/lworld/doc/building.md
 
@@ -69,4 +70,61 @@ real	0m14,478s
 user	0m34,952s
 sys	0m6,170s
 
+```
+
+## mandelbrot
+
+mandelbrot_2.java is the [mandelbrot Java #2 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/mandelbrot-java-2.html) that is currently (i.e. as of 20th March 2021) the fastest Java implementation according to official results.
+
+mandelbrot_panama_vector.java is a reimplementation with the inner vectorized loop loosely inspired by [mandelbrot Rust #7 program](https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/mandelbrot-rust-7.html). It uses Vector API from Project Panama to implement explicit SIMD vectorization using optimal vector sizes (matching CPU vector registers size).
+
+Note: Vector API has (currently?) much longer warmup than ordinary scalar code. Major chunk of time is spent on executing unoptimized code and on JIT optimizations. Running the code with bigger parameters will result in the performance improving as proportionally less time will be spent in unoptimized code and JIT compiler. I've included performance results for size 16000 (as in benchmark rules) and 64000 (to show how performance gap vs scalar code is growing).
+
+```
+$ ~/devel/jdk-16/bin/javac mandelbrot_2.java 
+$ ~/devel/jdk-16/bin/javac --add-modules jdk.incubator.vector mandelbrot_panama_vector.java 
+warning: using incubating module(s): jdk.incubator.vector
+1 warning
+
+$ ~/devel/jdk-16/bin/java mandelbrot_2 16000 > mandelbrot_16000_2.pbm
+$ ~/devel/jdk-16/bin/java --add-modules jdk.incubator.vector mandelbrot_panama_vector 16000 > mandelbrot_16000_panama_vector.pbm
+WARNING: Using incubator modules: jdk.incubator.vector
+$ md5sum *.pbm
+8c2ed8883de64eccd3154ac612021fe8  mandelbrot_16000_2.pbm
+8c2ed8883de64eccd3154ac612021fe8  mandelbrot_16000_panama_vector.pbm
+
+$ time for run in {1..10}; do ~/devel/jdk-16/bin/java mandelbrot_2 16000 > /dev/null; done
+
+real	0m29,941s
+user	1m56,997s
+sys	0m0,352s
+
+$ time for run in {1..10}; do ~/devel/jdk-16/bin/java --add-modules jdk.incubator.vector mandelbrot_panama_vector 16000 > /dev/null; done
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+real	0m12,780s
+user	0m46,307s
+sys	0m1,225s
+
+$ time ~/devel/jdk-16/bin/java mandelbrot_2 64000 > /dev/null
+
+real	0m46,806s
+user	3m5,170s
+sys	0m0,228s
+
+$ time ~/devel/jdk-16/bin/java --add-modules jdk.incubator.vector mandelbrot_panama_vector 64000 > /dev/null
+WARNING: Using incubator modules: jdk.incubator.vector
+
+real	0m14,670s
+user	0m56,406s
+sys	0m0,392s
 ```
