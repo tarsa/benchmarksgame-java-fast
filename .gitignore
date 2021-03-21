@@ -5,4 +5,5 @@
 /out
 
 # compiled classes
-*.class
+/pcre2.jextract
+/*.class
