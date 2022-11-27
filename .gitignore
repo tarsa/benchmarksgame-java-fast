@@ -7,3 +7,7 @@
 # compiled classes
 /pcre2.jextract
 /*.class
+
+# input and output data
+/*.pbm
+/*.txt

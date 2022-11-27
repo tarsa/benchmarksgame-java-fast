@@ -15,7 +15,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 public class mandelbrot_panama_vector {
@@ -65,28 +64,21 @@ public class mandelbrot_panama_vector {
         var aCr = IntStream.range(0, sideLen).parallel()
                 .mapToDouble(x -> x * fac - 1.5).toArray();
         var bitsReversalMapping = computeBitsReversalMapping();
-        var computeEc = Executors.newWorkStealingPool(numCpus);
-        for (var i = 0; i < sideLen; i++) {
-            var y = i;
-            computeEc.submit(() -> {
-                var rowChunks = threadRowChunks.get();
-                var rowOffset = y * rowOutputSize;
-                var Ci = y * fac - 1.0;
-                try {
-                    computeRow(Ci, aCr, bitsReversalMapping,
-                            rowChunks, rowsMerged, rowOffset);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    System.exit(-1);
-                }
-            });
-        }
-        computeEc.shutdown();
-        while (!computeEc.isTerminated()) {
-            try {
-                @SuppressWarnings("unused")
-                var ignored = computeEc.awaitTermination(1, TimeUnit.DAYS);
-            } catch (InterruptedException ignored) {
+        try (var computeEc = Executors.newWorkStealingPool(numCpus)) {
+            for (var i = 0; i < sideLen; i++) {
+                var y = i;
+                computeEc.submit(() -> {
+                    var rowChunks = threadRowChunks.get();
+                    var rowOffset = y * rowOutputSize;
+                    var Ci = y * fac - 1.0;
+                    try {
+                        computeRow(Ci, aCr, bitsReversalMapping,
+                                rowChunks, rowsMerged, rowOffset);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        System.exit(-1);
+                    }
+                });
             }
         }
         return rowsMerged;
@@ -134,6 +126,10 @@ public class mandelbrot_panama_vector {
                 var cmpMask1 = zeroMask;
                 var cmpMask2 = zeroMask;
                 var stop = false;
+                // NOTE: beware of NaNs and comparisons with them
+                //       Inf - Inf = NaN (i.e. not a number)
+                //       cmp(NaN, <anything>, compOp) = false
+                //       cmp(<anything>, NaN, compOp) = false
                 for (var outer = 0; !stop && outer < 10; outer++) {
                     for (var inner = 0; inner < 5; inner++) {
                         vZi1 = vZr1.add(vZr1).mul(vZi1).add(vCi);
@@ -145,17 +141,12 @@ public class mandelbrot_panama_vector {
                         vZrN1 = vZr1.mul(vZr1);
                         vZrN2 = vZr2.mul(vZr2);
                     }
-                    // I'm doing here: cmpMask = cmpMask.or(newValue);
-                    // instead of just: cmpMask = newValue;
-                    // because 4.lt(NaN) gives false
-                    // NaN comes from Infinity - Infinity
-                    // Infinity comes from numeric overflows
-                    cmpMask1 = cmpMask1.or(vFours.lt(vZiN1.add(vZrN1)));
-                    cmpMask2 = cmpMask2.or(vFours.lt(vZiN2.add(vZrN2)));
-                    stop = cmpMask1.allTrue() & cmpMask2.allTrue();
+                    cmpMask1 = vZiN1.add(vZrN1).lt(vFours);
+                    cmpMask2 = vZiN2.add(vZrN2).lt(vFours);
+                    stop = !cmpMask1.or(cmpMask2).anyTrue(); // i.e. all false
                 }
-                cmpFlags |= cmpMask1.toLong() << xInc;
-                cmpFlags |= cmpMask2.toLong() << (xInc + LANES);
+                cmpFlags |= cmpMask1.not().toLong() << xInc;
+                cmpFlags |= cmpMask2.not().toLong() << (xInc + LANES);
             }
             rowChunks[xBase >> 6] = cmpFlags;
         }
