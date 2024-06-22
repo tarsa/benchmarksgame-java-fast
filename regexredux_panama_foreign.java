@@ -5,7 +5,10 @@
    contributed by Piotr Tarsa
 */
 
-import java.lang.foreign.*;
+import jextract_pcre2.pcre2_h;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -23,15 +26,16 @@ public class regexredux_panama_foreign {
     private static final ExecutorService EXECUTOR_SERVICE =
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
+    private static final Arena GLOBAL_ARENA = Arena.global();
+
     public static void main(String[] args) throws Exception {
         final byte[] rawInput = System.in.readAllBytes();
         final int initialLength = rawInput.length;
 
-        final var sequence = MemorySegment
-                .allocateNative(initialLength, MemorySession.global());
-        final int sequenceLength = withMemSession(memSession -> {
-            var rawInputBuffer = memSession.allocateArray(JAVA_BYTE, rawInput);
-            var compiledPattern = compilePattern(">.*\n|\n");
+        final var sequence = GLOBAL_ARENA.allocate(initialLength);
+        final int sequenceLength = withArena(arena -> {
+            var rawInputBuffer = arena.allocateFrom(JAVA_BYTE, rawInput);
+            var compiledPattern = compilePattern(">.*\\n|\\n");
             return substitute(compiledPattern, rawInputBuffer, initialLength,
                     pcre2_h.NULL(), sequence, initialLength, "");
         });
@@ -44,12 +48,12 @@ public class regexredux_panama_foreign {
             iub.put("<[^>]*>", "|");
             iub.put("\\|[^|][^|]*\\|", "-");
 
-            return withMemSession(memSession -> {
+            return withArena(arena -> {
                 var currentLength = sequenceLength;
                 var bufLength = currentLength * 3 / 2;
-                var buf1 = memSession.allocate(bufLength, 1);
-                var buf2 = memSession.allocate(bufLength, 1);
-                buf1.copyFrom(sequence);
+                var buf1 = arena.allocate(bufLength);
+                var buf2 = arena.allocate(bufLength);
+                MemorySegment.copy(sequence, 0, buf1, 0, sequenceLength);
                 var flip = false;
 
                 for (Entry<String, String> entry : iub.entrySet()) {
@@ -81,13 +85,11 @@ public class regexredux_panama_foreign {
         var tasks = variants.stream().map(variant -> (Callable<String>) () -> {
             var compiledPattern = compilePattern(variant);
             var oVectorSize = 100;
-            var matchData =
-                    pcre2_h.pcre2_match_data_create_8(oVectorSize, pcre2_h.NULL());
-            var oVectorPtr = MemorySegment.ofAddress(
-                    pcre2_h.pcre2_get_ovector_pointer_8(matchData),
-                    16 * oVectorSize,
-                    MemorySession.global()
-            );
+            var matchData = pcre2_h
+                    .pcre2_match_data_create_8(oVectorSize, pcre2_h.NULL());
+            var oVectorPtr = pcre2_h
+                    .pcre2_get_ovector_pointer_8(matchData)
+                    .reinterpret(16 * oVectorSize);
             oVectorPtr.setAtIndex(JAVA_LONG, 1, 0);
             long count = 0;
             var result = 1;
@@ -114,18 +116,18 @@ public class regexredux_panama_foreign {
     }
 
     private static int substitute(
-            MemoryAddress compiledPattern,
+            MemorySegment compiledPattern,
             MemorySegment inputBuffer, int inputLength,
-            MemoryAddress matchContext,
+            MemorySegment matchContext,
             MemorySegment outputBuffer, int outputBufferLength,
             String replacement) {
-        return withMemSession(memSession -> {
+        return withArena(arena -> {
             var replacementBytes =
                     replacement.getBytes(StandardCharsets.US_ASCII);
-            var replacementBuffer = memSession.allocateArray(
+            var replacementBuffer = arena.allocateFrom(
                     JAVA_BYTE, replacementBytes);
-            var outputLengthHolder = memSession.allocate(
-                    JAVA_LONG, outputBufferLength);
+            var outputLengthHolder = arena.allocate(JAVA_LONG);
+            outputLengthHolder.setAtIndex(JAVA_LONG, 0, outputBufferLength);
             var options = pcre2_h.PCRE2_SUBSTITUTE_GLOBAL() |
                     pcre2_h.PCRE2_NO_UTF_CHECK();
             var substitutionResult = pcre2_h.pcre2_substitute_8(
@@ -137,24 +139,24 @@ public class regexredux_panama_foreign {
                     outputBuffer, outputLengthHolder);
             showPcre2ErrorIfAny("substitutionResult", substitutionResult);
             return substitutionResult < 0 ?
-                    0 : outputLengthHolder.get(JAVA_INT, 0);
+                    0 : outputLengthHolder.getAtIndex(JAVA_INT, 0);
         });
     }
 
-    private static MemoryAddress compilePattern(String pattern) {
-        return withMemSession(memSession -> {
+    private static MemorySegment compilePattern(String pattern) {
+        return withArena(arena -> {
             var patternBytes = pattern.getBytes(StandardCharsets.US_ASCII);
             var patternLength = patternBytes.length;
-            var bufPattern = memSession.allocateArray(JAVA_BYTE, patternBytes);
-            var bufErrorCode = memSession.allocate(pcre2_h.int64_t);
-            var bufErrorOffset = memSession.allocate(pcre2_h.int64_t);
+            var bufPattern = arena.allocateFrom(JAVA_BYTE, patternBytes);
+            var bufErrorCode = arena.allocate(pcre2_h.int64_t);
+            var bufErrorOffset = arena.allocate(pcre2_h.int64_t);
             var compiledPattern = pcre2_h.pcre2_compile_8(
                     bufPattern, patternLength, 0,
                     bufErrorCode, bufErrorOffset, pcre2_h.NULL());
             if (compiledPattern.equals(pcre2_h.NULL())) {
                 showPcre2Error("pcre2_compile_8 failed at offset " +
-                                bufErrorOffset.get(JAVA_INT, 0),
-                        bufErrorCode.get(JAVA_INT, 0));
+                                bufErrorOffset.getAtIndex(JAVA_INT, 0),
+                        bufErrorCode.getAtIndex(JAVA_INT, 0));
             }
             var jitCompileResult = pcre2_h.pcre2_jit_compile_8(
                     compiledPattern, pcre2_h.PCRE2_JIT_COMPLETE());
@@ -171,9 +173,9 @@ public class regexredux_panama_foreign {
     }
 
     private static void showPcre2Error(String description, int errorCode) {
-        withMemSession(memSession -> {
+        withArena(arena -> {
             var bufSize = 1000;
-            var buf = memSession.allocate(bufSize, 1);
+            var buf = arena.allocate(bufSize);
             var errorMsgLength = pcre2_h.pcre2_get_error_message_8(
                     errorCode, buf, bufSize);
             if (errorMsgLength >= 0) {
@@ -191,15 +193,15 @@ public class regexredux_panama_foreign {
         });
     }
 
-    private static void withMemSession(Consumer<MemorySession> body) {
-        try (var memSession = MemorySession.openConfined()) {
-            body.accept(memSession);
+    private static void withArena(Consumer<Arena> body) {
+        try (var arena = Arena.ofConfined()) {
+            body.accept(arena);
         }
     }
 
-    private static <T> T withMemSession(Function<MemorySession, T> body) {
-        try (var memSession = MemorySession.openConfined()) {
-            return body.apply(memSession);
+    private static <T> T withArena(Function<Arena, T> body) {
+        try (var arena = Arena.ofConfined()) {
+            return body.apply(arena);
         }
     }
 }

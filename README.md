@@ -20,7 +20,7 @@ Software:
 
 - [binary-trees](#binary-trees) using Project Valhalla to implement inline value types
 - [mandelbrot](#mandelbrot) using Vector API from Project Panama to implement explicit SIMD vectorization
-- [regex-redux](#regex-redux) using Foreign APIs from Project Panama to integrate with native libraries
+- [regex-redux](#regex-redux) using Foreign APIs from Project Panama to integrate with native libraries. Note that the API is already stabilized in Java 22+, but the jextract utility is still unofficial.
 
 ## binary-trees
 
@@ -146,38 +146,72 @@ regexredux_3.java is the [regex-redux Java #3 program](https://benchmarksgame-te
 
 regexredux_panama_foreign.java is an implementation written from scratch using Foreign APIs (i.e. both Foreign-Memory Access API and Foreign Linker API) that integrates with [PCRE2 library](https://www.pcre.org/current/doc/html/).
 
-To compile and run regexredux_panama_foreign.java you first need to generate glue code using jextract utility from [Project Panama](https://openjdk.org/projects/panama/), which can be found on [Project Jextract Early-Access Builds](https://jdk.java.net/jextract/). I've used `Build 19-jextract+2-3 (2022/7/19)` ([direct link](https://download.java.net/java/early_access/jextract/2/openjdk-19-jextract+2-3_linux-x64_bin.tar.gz), [checksum](https://download.java.net/java/early_access/jextract/2/openjdk-19-jextract+2-3_linux-x64_bin.tar.gz.sha256)).
+To compile and run regexredux_panama_foreign.java you first need to generate glue code using jextract utility from [Project Panama](https://openjdk.org/projects/panama/), which can be found on [Project Jextract Early-Access Builds](https://jdk.java.net/jextract/). I've used Linux version of `Build 22-jextract+5-33 (2024/5/28)` ([direct link](https://download.java.net/java/early_access/jextract/22/5/openjdk-22-jextract+5-33_linux-x64_bin.tar.gz), [checksum](https://download.java.net/java/early_access/jextract/22/5/openjdk-22-jextract+5-33_linux-x64_bin.tar.gz.sha256)).
 
 ```
 $ # use jextract utility from OpenJDK build from Project Panama
 $ # to generate glue code in compiled form (*.class files)
-$ mkdir pcre2.jextract
-$ cd pcre2.jextract
-$ ~/devel/jdk-19-jextract/bin/jextract -D "PCRE2_CODE_UNIT_WIDTH=8" -l pcre2-8 /usr/include/pcre2.h
-WARNING: A restricted method in java.lang.foreign.Linker has been called
-WARNING: java.lang.foreign.Linker::nativeLinker has been called by module org.openjdk.jextract
-WARNING: Use --enable-native-access=org.openjdk.jextract to avoid a warning for this module
-
-WARNING: skipping strtold because of unsupported type usage: long double
-WARNING: skipping qecvt because of unsupported type usage: long double
-WARNING: skipping qfcvt because of unsupported type usage: long double
-WARNING: skipping qgcvt because of unsupported type usage: long double
-WARNING: skipping qecvt_r because of unsupported type usage: long double
-WARNING: skipping qfcvt_r because of unsupported type usage: long double
-$ cd ..
+$ ~/devel/jextract-22/bin/jextract -D "PCRE2_CODE_UNIT_WIDTH=8" -l pcre2-8 /usr/include/pcre2.h -t jextract_pcre2
+WARNING: Skipping _Float64x (type LongDouble is not supported)
+WARNING: Skipping strtold (type LongDouble is not supported)
+WARNING: Skipping qecvt (type LongDouble is not supported)
+WARNING: Skipping qfcvt (type LongDouble is not supported)
+WARNING: Skipping qgcvt (type LongDouble is not supported)
+WARNING: Skipping qecvt_r (type LongDouble is not supported)
+WARNING: Skipping qfcvt_r (type LongDouble is not supported)
+WARNING: Skipping pcre2_real_general_context_8 (type Declared(pcre2_real_general_context_8) is not supported)
+WARNING: Skipping pcre2_general_context_8 (type Declared(pcre2_real_general_context_8) is not supported)
+WARNING: Skipping pcre2_real_compile_context_8 (type Declared(pcre2_real_compile_context_8) is not supported)
+WARNING: Skipping pcre2_compile_context_8 (type Declared(pcre2_real_compile_context_8) is not supported)
+WARNING: Skipping pcre2_real_match_context_8 (type Declared(pcre2_real_match_context_8) is not supported)
+WARNING: Skipping pcre2_match_context_8 (type Declared(pcre2_real_match_context_8) is not supported)
+WARNING: Skipping pcre2_real_convert_context_8 (type Declared(pcre2_real_convert_context_8) is not supported)
+WARNING: Skipping pcre2_convert_context_8 (type Declared(pcre2_real_convert_context_8) is not supported)
+WARNING: Skipping pcre2_real_code_8 (type Declared(pcre2_real_code_8) is not supported)
+WARNING: Skipping pcre2_code_8 (type Declared(pcre2_real_code_8) is not supported)
+WARNING: Skipping pcre2_real_match_data_8 (type Declared(pcre2_real_match_data_8) is not supported)
+WARNING: Skipping pcre2_match_data_8 (type Declared(pcre2_real_match_data_8) is not supported)
+WARNING: Skipping pcre2_real_jit_stack_8 (type Declared(pcre2_real_jit_stack_8) is not supported)
+WARNING: Skipping pcre2_jit_stack_8 (type Declared(pcre2_real_jit_stack_8) is not supported)
+WARNING: Skipping pcre2_real_general_context_16 (type Declared(pcre2_real_general_context_16) is not supported)
+WARNING: Skipping pcre2_general_context_16 (type Declared(pcre2_real_general_context_16) is not supported)
+WARNING: Skipping pcre2_real_compile_context_16 (type Declared(pcre2_real_compile_context_16) is not supported)
+WARNING: Skipping pcre2_compile_context_16 (type Declared(pcre2_real_compile_context_16) is not supported)
+WARNING: Skipping pcre2_real_match_context_16 (type Declared(pcre2_real_match_context_16) is not supported)
+WARNING: Skipping pcre2_match_context_16 (type Declared(pcre2_real_match_context_16) is not supported)
+WARNING: Skipping pcre2_real_convert_context_16 (type Declared(pcre2_real_convert_context_16) is not supported)
+WARNING: Skipping pcre2_convert_context_16 (type Declared(pcre2_real_convert_context_16) is not supported)
+WARNING: Skipping pcre2_real_code_16 (type Declared(pcre2_real_code_16) is not supported)
+WARNING: Skipping pcre2_code_16 (type Declared(pcre2_real_code_16) is not supported)
+WARNING: Skipping pcre2_real_match_data_16 (type Declared(pcre2_real_match_data_16) is not supported)
+WARNING: Skipping pcre2_match_data_16 (type Declared(pcre2_real_match_data_16) is not supported)
+WARNING: Skipping pcre2_real_jit_stack_16 (type Declared(pcre2_real_jit_stack_16) is not supported)
+WARNING: Skipping pcre2_jit_stack_16 (type Declared(pcre2_real_jit_stack_16) is not supported)
+WARNING: Skipping pcre2_real_general_context_32 (type Declared(pcre2_real_general_context_32) is not supported)
+WARNING: Skipping pcre2_general_context_32 (type Declared(pcre2_real_general_context_32) is not supported)
+WARNING: Skipping pcre2_real_compile_context_32 (type Declared(pcre2_real_compile_context_32) is not supported)
+WARNING: Skipping pcre2_compile_context_32 (type Declared(pcre2_real_compile_context_32) is not supported)
+WARNING: Skipping pcre2_real_match_context_32 (type Declared(pcre2_real_match_context_32) is not supported)
+WARNING: Skipping pcre2_match_context_32 (type Declared(pcre2_real_match_context_32) is not supported)
+WARNING: Skipping pcre2_real_convert_context_32 (type Declared(pcre2_real_convert_context_32) is not supported)
+WARNING: Skipping pcre2_convert_context_32 (type Declared(pcre2_real_convert_context_32) is not supported)
+WARNING: Skipping pcre2_real_code_32 (type Declared(pcre2_real_code_32) is not supported)
+WARNING: Skipping pcre2_code_32 (type Declared(pcre2_real_code_32) is not supported)
+WARNING: Skipping pcre2_real_match_data_32 (type Declared(pcre2_real_match_data_32) is not supported)
+WARNING: Skipping pcre2_match_data_32 (type Declared(pcre2_real_match_data_32) is not supported)
+WARNING: Skipping pcre2_real_jit_stack_32 (type Declared(pcre2_real_jit_stack_32) is not supported)
+WARNING: Skipping pcre2_jit_stack_32 (type Declared(pcre2_real_jit_stack_32) is not supported)
 
 $ # generate test data using some valid fasta benchmark program implementation
-$ ~/devel/jdk-19.0.1/bin/java fasta_2.java 5000000 > regexredux-input-5000000.txt
+$ ~/devel/jdk-22.0.1/bin/java fasta_2.java 5000000 > regexredux-input-5000000.txt
 
 $ # compile main classes
-$ ~/devel/jdk-19.0.1/bin/javac regexredux_3.java
-$ ~/devel/jdk-19.0.1/bin/javac --release 19 --enable-preview -cp pcre2.jextract regexredux_panama_foreign.java
-Note: regexredux_panama_foreign.java uses preview features of Java SE 19.
-Note: Recompile with -Xlint:preview for details.
+$ ~/devel/jdk-22.0.1/bin/javac regexredux_3.java
+$ ~/devel/jdk-22.0.1/bin/javac regexredux_panama_foreign.java
 
 $ # run
 
-$ time ~/devel/jdk-19.0.1/bin/java regexredux_3 < regexredux-input-5000000.txt
+$ time ~/devel/jdk-22.0.1/bin/java regexredux_3 < regexredux-input-5000000.txt
 agggtaaa|tttaccct 356
 [cgt]gggtaaa|tttaccc[acg] 1250
 a[act]ggtaaa|tttacc[agt]t 4252
@@ -192,11 +226,11 @@ agggtaa[cgt]|[acg]ttaccct 2178
 50000000
 27388361
 
-real	0m4,210s
-user	0m12,709s
-sys	0m0,232s
+real	0m4,005s
+user	0m12,453s
+sys	0m0,227s
 
-$ time ~/devel/jdk-19.0.1/bin/java --enable-preview --enable-native-access=ALL-UNNAMED -Dforeign.restricted=permit -cp .:pcre2.jextract -Djava.library.path=/usr/lib/x86_64-linux-gnu/ regexredux_panama_foreign < regexredux-input-5000000.txt
+$ time ~/devel/jdk-22.0.1/bin/java --enable-native-access=ALL-UNNAMED -Djava.library.path=/usr/lib/x86_64-linux-gnu/ regexredux_panama_foreign < regexredux-input-5000000.txt
 agggtaaa|tttaccct 356
 [cgt]gggtaaa|tttaccc[acg] 1250
 a[act]ggtaaa|tttacc[agt]t 4252
@@ -211,7 +245,7 @@ agggtaa[cgt]|[acg]ttaccct 2178
 50000000
 27388361
 
-real	0m1,095s
-user	0m2,317s
-sys	0m0,153s
+real	0m1,088s
+user	0m2,209s
+sys	0m0,121s
 ```

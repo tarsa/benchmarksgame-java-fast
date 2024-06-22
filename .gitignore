@@ -5,7 +5,7 @@
 /out
 
 # compiled classes
-/pcre2.jextract
+/jextract_pcre2
 /*.class
 
 # input and output data
